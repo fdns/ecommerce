@@ -41,6 +41,7 @@ matrix:
 
     - python: 3.6
       env: TESTNAME=quality-and-js
+      cache: false
       install:
         - docker exec -t ecommerce_testing bash -c 'source /edx/app/ecommerce/ecommerce_env && cd /edx/app/ecommerce/ecommerce/ && make requirements'
       script:
@@ -70,6 +71,7 @@ matrix:
     
     - python: 3.6
       env: TESTNAME=test-python
+      cache: false
       install:
         - docker exec -t ecommerce_testing bash -c 'source /edx/app/ecommerce/ecommerce_env && cd /edx/app/ecommerce/ecommerce/ && make requirements'
       script:
