@@ -54,7 +54,10 @@ matrix:
         - codecov
     
     - python: 3.6
-      env: TESTNAME=test-python-3.6
+      env: 
+        - TESTNAME=test-python-3.6 TOXENV=py36
+      install:
+        - pip install tox==3.12.1
       script:
-        - tox -e py36
+        - tox
 
