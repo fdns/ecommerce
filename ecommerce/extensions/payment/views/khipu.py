@@ -20,12 +20,15 @@ from oscar.core.loading import get_class, get_model
 from ecommerce.extensions.basket.utils import basket_add_organization_attribute
 from ecommerce.extensions.checkout.mixins import EdxOrderPlacementMixin
 from ecommerce.extensions.checkout.utils import get_receipt_page_url
-from ecommerce.extensions.payment.processors.khipu import Khipu
+from ecommerce.extensions.payment.processors.khipu import Khipu, KhipuAlreadyProcessed
 
 logger = logging.getLogger(__name__)
 
 Applicator = get_class('offer.applicator', 'Applicator')
 PaymentProcessorResponse = get_model('payment', 'PaymentProcessorResponse')
+NoShippingRequired = get_class('shipping.methods', 'NoShippingRequired')
+OrderTotalCalculator = get_class('checkout.calculators', 'OrderTotalCalculator')
+
 
 class KiphiPaymentPendingView(View):
     def get(self, request):
@@ -78,8 +81,8 @@ class KhipuPaymentCheckView(EdxOrderPlacementMixin, View):
         return ""
 
 
-
 class KhipuPaymentNotificationView(EdxOrderPlacementMixin, View):
+    """Process the Kiphu notification of a completed transaction"""
     @property
     def payment_processor(self):
         return Khipu(self.request.site)
@@ -124,22 +127,18 @@ class KhipuPaymentNotificationView(EdxOrderPlacementMixin, View):
 
     def post(self, request):
         """Handle a notification received by Khipu with status update of a transaction"""
-        receipt_url = "/"
         try:
             khipu_data = self.payment_processor.get_transaction_data(request.POST)
             payment_id = self.payment_processor.get_payment_id(khipu_data)
             logger.info(u"Payment [%s] update received by Khipu", payment_id)
-            
+
             basket = self._get_basket(payment_id)
             if not basket:
-                return redirect(self.payment_processor.error_url)
-            receipt_url = get_receipt_page_url(
-                order_number=basket.order_number,
-                site_configuration=basket.site.siteconfiguration
-            )
+                logger.error("Basket not found for payment [%s]", payment_id)
+                raise Http404()
         except Exception as e:  # pylint: disable=broad-except
             logger.exception("Error receiving payment {} {}".format(request.POST, e))
-            return redirect(receipt_url)
+            raise Http404()
 
         try:
             with transaction.atomic():
@@ -147,11 +146,17 @@ class KhipuPaymentNotificationView(EdxOrderPlacementMixin, View):
                     self.handle_payment(khipu_data, basket)
                 except PaymentError:
                     return redirect(self.payment_processor.error_url)
-        except:  # pylint: disable=bare-except
+                except KhipuAlreadyProcessed:
+                    # Return 400, telling khipu that the transaction was already processed
+                    raise HttpResponseBadRequest()
+        except HttpResponseBadRequest:
+            raise
+        except Exception:
             logger.exception('Attempts to handle payment for basket [%d] failed.', basket.id)
-            return redirect(receipt_url)
+            raise Http404()
 
         try:
+            # Generate and handle the order
             shipping_method = NoShippingRequired()
             shipping_charge = shipping_method.calculate(basket)
             order_total = OrderTotalCalculator().calculate(basket, shipping_charge)
@@ -175,7 +180,7 @@ class KhipuPaymentNotificationView(EdxOrderPlacementMixin, View):
             )
             self.handle_post_order(order)
 
-            return redirect(receipt_url)
+            return HttpResponse('')
         except Exception as e:  # pylint: disable=broad-except
-            logger.exception(self.order_placement_failure_msg, basket.id, e)
-            return redirect(receipt_url)
+            logger.exception(self.order_placement_failure_msg, payment_id, basket.id)
+            raise Http404()
