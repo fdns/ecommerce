@@ -9,6 +9,7 @@ import urllib
 from urlparse import urljoin
 from collections import OrderedDict
 from decimal import Decimal
+import xml.etree.ElementTree as xml
 
 from django.urls import reverse
 from oscar.apps.payment.exceptions import GatewayError, TransactionDeclined
@@ -77,6 +78,8 @@ class Khipu(BasePaymentProcessor):
 
         The hash algorithm is HMAC(SECRET, METHOD&URL&PARAMETERS), with parameters sorted.
 
+        We have to replace the *, + and %7E, as they are parsed differently by the api
+
         Arguments:
             method: http method of the request
             url: Url, including domain of the request. Must not include any GET parameters
@@ -87,6 +90,9 @@ class Khipu(BasePaymentProcessor):
         """
         method_name = method.upper()
         to_sign = method_name + '&' + urllib.quote_plus(url) + (('&' + urllib.urlencode(data)) if len(data) > 0 else '')
+        to_sign = to_sign.replace("+", "%20")\
+            .replace("*", "%2A")\
+            .replace("%7E", "~")
         return hmac.new(self.configuration['secret'], to_sign, hashlib.sha256).hexdigest()
 
     def get_transaction_parameters(self, basket, request=None, use_client_side_checkout=False, **kwargs):
@@ -113,20 +119,20 @@ class Khipu(BasePaymentProcessor):
             site_configuration=basket.site.siteconfiguration
         )
         # return_url = urljoin(get_ecommerce_url(), reverse('checkout:receipt'))  #urljoin(get_ecommerce_url(), reverse('khipu:execute'))
-        cancel_url = urljoin(get_ecommerce_url(), reverse('checkout:cancel-checkout'))  # urljoin(get_ecommerce_url(), reverse('khipu:cancel'))
+        cancel_url = urljoin(get_ecommerce_url(), reverse('checkout:cancel-checkout'))
         notify_url = urljoin(get_ecommerce_url(), reverse('khipu:execute'))
         data = {
             'transaction_id': basket.order_number,
             'subject': basket.order_number,
             'currency': 'CLP',
             'amount': unicode(basket.total_incl_tax),
-            # 'custom': None,
-            # 'body': None,
+            'custom': self._build_item_xml(basket),
+            'body': self._build_item_body(basket),
             # 'bank_id': None,
             'return_url': return_url,
             'cancel_url': cancel_url,
             # 'picture_url': None,
-            'notify_url': notify_url,  # TODO: Add basket id
+            'notify_url': notify_url,
             # 'contract_url': None,
             'notify_api_version': self.NOTIFICATION_API_VERSION,
             # 'expires_date': None,
@@ -152,6 +158,48 @@ class Khipu(BasePaymentProcessor):
         }
 
         return parameters
+
+    def _build_item_xml(self, basket):
+        """
+        Build the xml with the items in the basket.
+
+        The expected formas is:
+            <items>
+              <item>
+                  <name>Compra 1</name>
+                </item>
+                <item>
+                    <name>Compra 2</name>
+                </item>
+            </items>
+
+        Arguments:
+            basket: Basket with the items to add
+        Returns:
+            String with the xml of the basket
+        """
+        result = xml.Element("items")
+        for item in basket.all_lines():
+            line = xml.Element("item")
+            result.append(line)
+
+            name = xml.SubElement(line, "name")
+            name.text = item.product.title
+        tree = result
+        return xml.tostring(tree).decode()
+
+    def _build_item_body(self, basket):
+        """
+        Build a description of the items in the basket
+        Arguments:
+            basket: Basket with the items to add
+        Returns:
+            String with the body of the basket
+        """
+        result = []
+        for item in basket.all_lines():
+            result.append('{} [{}]'.format(item.product.title, item.quantity))
+        return '\n'.join(result)
 
     def handle_processor_response(self, responce, basket):
         """
