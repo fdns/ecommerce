@@ -13,6 +13,7 @@ from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import View
+from django.views.generic import RedirectView, TemplateView
 from oscar.apps.partner import strategy
 from oscar.apps.payment.exceptions import PaymentError
 from oscar.core.loading import get_class, get_model
@@ -20,7 +21,7 @@ from oscar.core.loading import get_class, get_model
 from ecommerce.extensions.basket.utils import basket_add_organization_attribute
 from ecommerce.extensions.checkout.mixins import EdxOrderPlacementMixin
 from ecommerce.extensions.checkout.utils import get_receipt_page_url
-from ecommerce.extensions.payment.processors.khipu import Khipu, KhipuAlreadyProcessed
+from ecommerce.extensions.payment.processors.khipu import Khipu, KhipuWebpay, KhipuAlreadyProcessed
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,13 @@ NoShippingRequired = get_class('shipping.methods', 'NoShippingRequired')
 OrderTotalCalculator = get_class('checkout.calculators', 'OrderTotalCalculator')
 
 
-class KiphiPaymentPendingView(View):
-    def get(self, request):
-        # done
-        pass
+class KiphiPaymentPendingView(TemplateView):
+    template_name = 'payment/khipu.html'
 
+    def get_context_data(self, **kwargs):
+        context = super(KiphiPaymentPendingView, self).get_context_data(**kwargs)
+        #context.update({})
+        return context
 
 class KhipuPaymentCheckView(EdxOrderPlacementMixin, View):
     @property
@@ -184,3 +187,9 @@ class KhipuPaymentNotificationView(EdxOrderPlacementMixin, View):
         except Exception as e:  # pylint: disable=broad-except
             logger.exception(self.order_placement_failure_msg, payment_id, basket.id)
             raise Http404()
+
+class KhipuWebpayPaymentNotificationView(KhipuPaymentNotificationView):
+    """Process the Kiphu notification of a completed transaction"""
+    @property
+    def payment_processor(self):
+        return KhipuWebpay(self.request.site)

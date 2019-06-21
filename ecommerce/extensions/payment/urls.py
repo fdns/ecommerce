@@ -30,6 +30,11 @@ KHIPU_URLS = [
     url(r'^test/', khipu.KhipuPaymentCheckView.as_view(), name='test'),
 ]
 
+KHIPU_WEBPAY_URLS = [
+    url(r'^execute/', khipu.KhipuWebpayPaymentNotificationView.as_view(), name='execute'),
+    url(r'^pending/', khipu.KiphiPaymentPendingView.as_view(), name='pending')
+]
+
 urlpatterns = [
     url(r'^cybersource/', include(CYBERSOURCE_URLS, namespace='cybersource')),
     url(r'^error/$', PaymentFailedView.as_view(), name='payment_error'),
@@ -37,4 +42,5 @@ urlpatterns = [
     url(r'^sdn/', include(SDN_URLS, namespace='sdn')),
     url(r'^stripe/', include(STRIPE_URLS, namespace='stripe')),
     url(r'^khipu/', include(KHIPU_URLS, namespace='khipu')),
+    url(r'^khipuwebpay/', include(KHIPU_WEBPAY_URLS, namespace='khipuwebpay')),
 ]

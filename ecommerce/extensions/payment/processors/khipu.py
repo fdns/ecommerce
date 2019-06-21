@@ -120,7 +120,7 @@ class Khipu(BasePaymentProcessor):
         )
         # return_url = urljoin(get_ecommerce_url(), reverse('checkout:receipt'))  #urljoin(get_ecommerce_url(), reverse('khipu:execute'))
         cancel_url = urljoin(get_ecommerce_url(), reverse('checkout:cancel-checkout'))
-        notify_url = urljoin(get_ecommerce_url(), reverse('khipu:execute'))
+        notify_url = self.notify_url
         data = {
             'transaction_id': basket.order_number,
             'subject': basket.order_number,
@@ -154,10 +154,21 @@ class Khipu(BasePaymentProcessor):
         self.record_processor_response(result, transaction_id=result['payment_id'], basket=basket)
 
         parameters = {
-            'payment_page_url': result['payment_url'],
+            'payment_page_url': self.get_payment_url(result['payment_url'], result['webpay_url']),
         }
 
         return parameters
+
+    def get_payment_url(self, khipu_url, webpay_url):
+        """
+        Get the payment url.
+        Arguments:
+            khipu_url: Url to the khipu processor handler,
+            webpay_url: Url to the webpay processor handler.
+
+        Returns: Khipu processor handler.
+        """
+        return khipu_url
 
     def _build_item_xml(self, basket):
         """
@@ -265,5 +276,28 @@ class Khipu(BasePaymentProcessor):
         return data['payment_id']
 
     @property
-    def error_url(self):
-        return "/todo"
+    def notify_url(self):
+        """Url for kiphu to notify a successful transaction"""
+        return urljoin(get_ecommerce_url(), reverse('khipu:execute'))
+
+
+class KhipuWebpay(Khipu):
+    """
+    Khipu inherit handler for a direct webpay processor.
+    """
+    NAME = 'webpay'
+
+    def get_payment_url(self, khipu_url, webpay_url):
+        """
+        Get the payment url.
+        Arguments:
+            khipu_url: Url to the khipu processor handler,
+            webpay_url: Url to the webpay processor handler.
+
+        Returns: Webpay processor handler.
+        """
+        return webpay_url
+
+    @property
+    def notify_url(self):
+        return urljoin(get_ecommerce_url(), reverse('khipuwebpay:execute'))
