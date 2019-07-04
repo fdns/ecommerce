@@ -285,7 +285,7 @@ class KhipuWebpay(Khipu):
     """
     Khipu inherit handler for a direct webpay processor.
     """
-    NAME = 'webpay'
+    NAME = 'khipuwebpay'
 
     def get_payment_url(self, khipu_url, webpay_url):
         """

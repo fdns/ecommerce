@@ -1,6 +1,6 @@
 from django.conf.urls import include, url
 
-from ecommerce.extensions.payment.views import PaymentFailedView, SDNFailure, cybersource, paypal, stripe, khipu
+from ecommerce.extensions.payment.views import PaymentFailedView, SDNFailure, cybersource, paypal, stripe, khipu, webpay
 
 CYBERSOURCE_APPLE_PAY_URLS = [
     url(r'^authorize/$', cybersource.CybersourceApplePayAuthorizationView.as_view(), name='authorize'),
@@ -35,6 +35,11 @@ KHIPU_WEBPAY_URLS = [
     url(r'^pending/', khipu.KiphiPaymentPendingView.as_view(), name='pending')
 ]
 
+WEBPAY_URLS = [
+    url(r'^execute/', webpay.WebpayPaymentNotificationView.as_view(), name='execute'),
+    url(r'^return/(?P<order_number>.+)/$', webpay.WebpaySuccessfulView.as_view(), name='return'),
+]
+
 urlpatterns = [
     url(r'^cybersource/', include(CYBERSOURCE_URLS, namespace='cybersource')),
     url(r'^error/$', PaymentFailedView.as_view(), name='payment_error'),
@@ -43,4 +48,5 @@ urlpatterns = [
     url(r'^stripe/', include(STRIPE_URLS, namespace='stripe')),
     url(r'^khipu/', include(KHIPU_URLS, namespace='khipu')),
     url(r'^khipuwebpay/', include(KHIPU_WEBPAY_URLS, namespace='khipuwebpay')),
+    url(r'^webpay/', include(WEBPAY_URLS, namespace='webpay')),
 ]
